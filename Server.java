@@ -1,49 +1,70 @@
 
 import java.io.*;
 import java.net.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Server {
+    private static List<String[]> csvData = new ArrayList<>();
     public static final int PORT = 1050; // porta al di fuori del range 1-1024 !
 
     public static void main(String[] args) throws IOException {
-        try (  ServerSocket serverSocket = new ServerSocket(PORT)) {
-            System.out.println("EchoServer: started ");
-            System.out.println("Server Socket: " + serverSocket);
-            Socket clientSocket=null;
-            BufferedReader in=null;
-            PrintWriter out=null;
-            try {
-                // bloccante finchè non avviene una connessione
-                clientSocket = serverSocket.accept();
-                System.out.println("Connection accepted: "+ clientSocket);
-                // creazione stream di input da clientSocket
-                InputStreamReader isr = new InputStreamReader(clientSocket.getInputStream());
-                in = new BufferedReader(isr);
-                // creazione stream di output su clientSocket
-                OutputStreamWriter osw = new OutputStreamWriter(clientSocket.getOutputStream());
-                BufferedWriter bw = new BufferedWriter(osw);
-                out = new PrintWriter(bw, true);
-                //ciclo di ricezione dal client e invio di risposta
-                out.print("Hello (END to close connection): ");
-                out.flush();
-                while (true) {
-                    String str = in.readLine();
-                    if (str.equals("END")) break;
-                    System.out.println("Echoing: " + str.toUpperCase());
-                    out.println(str.toUpperCase());
+        loadCSV("mappa-dei-fari-in-italia.csv");
+
+        try (ServerSocket server = new ServerSocket(PORT)) {
+            System.out.format("Server in ascolto su: %s%n",
+                    server.getLocalSocketAddress());
+
+            // Il server accetta e serve un client alla volta
+            while (true) {
+                try (Socket client = server.accept()) {
+                    String rem = client.getRemoteSocketAddress().toString();
+                    System.out.format("Client (remoto): %s%n", rem);
+                    comunica(client);
+                } catch (IOException e) {
+                    System.err.println(String.format("Errore durante la comunicazione con il client: %s", e.getMessage()));
+
                 }
             }
-            catch (IOException e) {
-                System.err.println("Accept failed");
-                System.exit(1);
-            }
-            // chiusura di stream e socket
-            System.out.println("EchoServer: closing...");
-            out.close();
-            in.close();
-            clientSocket.close();
-        } }
+        } catch (IOException e) {
+            System.err.println(String.format("Errore server: %s", e.getMessage()));
+        }
+    }
+
+    private static void comunica(Socket sck) throws IOException {
+        ObjectInputStream in = new ObjectInputStream(sck.getInputStream());
+        System.out.println("In attesa di ricevere informazioni dal client...");
+        ParametriCSV ric = null;
+        try {
+        // Deserializzazione: ricevo una sequenza di byte e
+        // la trasformo in un oggetto
+            ric = (ParametriCSV) in.readObject();
+        } catch (ClassNotFoundException e) {
+            throw new IOException("Tipo di ricerca non supportata.");
+        }
+        System.out.format("Ricevuta dal client la ricerca: cognome = '%s' nome = '%s'%n", ric.cognome, ric.nome);
+        Risultato ris = elabora(ric);
+        ObjectOutputStream out = new ObjectOutputStream(sck.getOutputStream());
+        out.writeObject(ris);
+        System.out.println("Inviato al client il risultato della ricerca");
+    }
+    private static Risultato elabora(ParametriCSV r) {
+        Risultato ris;
+        boolean trovato;
+        trovato = r.cognome.toUpperCase().equals("ROSSI") &&
+                r.nome.toUpperCase().equals("MARIO");
+        if (trovato == true) {
+            ris = new Risultato("Rossi", "Mario", 10012, 1598.50);
+        }
+        else {
+            ris = null;
+        }
+        return ris;
+    }
 
 
-}
+        private static void loadCSV (String s){
+        }
 
+
+    }
